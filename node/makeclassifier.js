@@ -10,6 +10,11 @@ files.forEach(function(file) {
   var lines = data.split("\n");
   for(var i = 0; i< lines.length; i++){
     classifier.learn(lines[i].toLowerCase(), file);
+    var parts = lines[i].toLowerCase().split(" ");
+    for(var j = 0; j<parts.length;j++){
+      parts[j]=parts[j]+"s";
+    }
+    classifier.learn(parts.join(" "), file)
   }
 });
 

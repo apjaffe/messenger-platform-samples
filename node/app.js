@@ -24,7 +24,7 @@ var data = fs.readFileSync("bayes.json", "utf8");
 var classifier = bayes.fromJson(data);
 
 var app = express();
-app.set('port', process.env.PORT || 443);
+app.set('port', process.env.PORT || 80);//443);
 app.set('view engine', 'ejs');
 app.use(bodyParser.json({ verify: verifyRequestSignature }));
 app.use(express.static('public'));
@@ -206,10 +206,13 @@ function receivedAuthentication(event) {
   sendTextMessage(senderID, "Authentication successful");
 }
 
+var first = {};
 var budgets = {};
+var totalBudgets = {};
 var cats = ["misc"];
 var dollarRegex = /(\$?\d+\.\d{2})|(\$\d+)|(\d+ bucks)|(\d+ dollar)/g;
 var numRegex = /\d+(\.\d{2})?/
+var introText = "Hi, welcome to budget friend! We'll divide your budget into five categories: food, housing, entertainment, education, and misc. The default budget for each category is $100 -- feel free to change that by telling me to \"set budget for [whatever] to [some amount]\". Just tell me about your expenses and I'll keep track of them. At the end of the month you can tell me to \"reset\" your budget for a particular category and I'll put it back to the original value."
 
 function getBudget(id, cat){
   
@@ -217,7 +220,13 @@ function getBudget(id, cat){
     budgets[id] = {};
   }
   if(budgets[id][cat] == undefined){
-    budgets[id][cat] = 0;
+    budgets[id][cat] = 100;
+  }
+  if(totalBudgets[id] === undefined){
+    budgets[id] = {};
+  }
+  if(totalBudgets[id][cat] == undefined){
+    totalBudgets[id][cat] = 100;
   }
   return budgets[id][cat];
 }
@@ -225,20 +234,43 @@ function incBudget(id, cat, amt){
   var newAmt = getBudget(id,cat) + amt;
   budgets[id][cat] = newAmt;
 }
+function setBudget(id, cat, amt){
+  getBudget(id,cat);
+  budgets[id][cat] = amt;
+  totalBudgets[id][cat] = amt;
+}
+function resetBudget(id, cat, amt){
+  getBudget(id,cat);
+  budgets[id][cat] = totalBudgets[id][cat];
+}
 
 function processBudgetMessage(senderID, messageText){
   var cat = classifier.categorize(messageText.toLowerCase());
   var matches = messageText.match(dollarRegex);
-  
+  if(!matches){
+    matches = messageText.match(numRegex);
+  }
+  var setBudget = messageText.indexOf("budget")!==-1 && messageText.indexOf("set") !== -1;
   if(matches){
     for(var i = 0; i < matches.length; i++){
       var text = matches[i].match(numRegex)[0]; //matches[i].charAt(0)=="$"?matches[i].substr(1):matches[i];
       var amt = Number(text);
-      incBudget(senderID, cat, amt);
+      if(setBudget){
+        setBudget(senderID, cat, amt);
+      } else {
+        incBudget(senderID, cat, -amt);
+      }
     }
+  } else if(messageText.indexOf("reset")!==-1){
+    resetBudget(senderID, cat);
   }
 
-  sendTextMessage(senderID, "Your current budget for " + cat + " is $" + Number(getBudget(senderID,cat)).toFixed(2));
+  if(!first[senderID]){
+    first[senderID] = true;
+    sendTextMessage(senderID, introText);
+  }
+
+  sendTextMessage(senderID, "Your remaining budget for " + cat + " is $" + Number(getBudget(senderID,cat)).toFixed(2));
 }
 
 /*

@@ -1,6 +1,6 @@
 {
-    "appSecret": "",
-    "pageAccessToken": "",
-    "validationToken": "",
-    "serverURL": ""
+    "appSecret": "de944f6478d6492575faef6b3bef88da",
+    "pageAccessToken": "EAADwQdyQcOYBAKKodc84KYMVbiyABMdbhLVIKweGdJ9M4VQoxMZBw4mdbMfn6IuThGbu1irqb3lg7dRiSiiGEHQSFuuJ2ZAxDjiPYXUhW4Ocj4J30K8ju4quO9XWHbXlhjDniAmP4D93bZA3WVWHdZBZClJ9PUGl5AEsw9JYqRQZDZD",
+    "validationToken": "this is a potato verify",
+    "serverURL": "https://ec2-54-191-84-139.us-west-2.compute.amazonaws.com/"
 }
