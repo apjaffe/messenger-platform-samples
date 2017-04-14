@@ -8,18 +8,23 @@
  */
 
 /* jshint node: true, devel: true */
-'use strict';
+//'use strict';
 
-const 
+var 
   bodyParser = require('body-parser'),
   config = require('config'),
   crypto = require('crypto'),
   express = require('express'),
   https = require('https'),  
   request = require('request');
+var fs = require('fs');
+var bayes = require('bayes')
+
+var data = fs.readFileSync("bayes.json", "utf8");
+var classifier = bayes.fromJson(data);
 
 var app = express();
-app.set('port', process.env.PORT || 5000);
+app.set('port', process.env.PORT || 443);
 app.set('view engine', 'ejs');
 app.use(bodyParser.json({ verify: verifyRequestSignature }));
 app.use(express.static('public'));
@@ -201,6 +206,41 @@ function receivedAuthentication(event) {
   sendTextMessage(senderID, "Authentication successful");
 }
 
+var budgets = {};
+var cats = ["misc"];
+var dollarRegex = /(\$?\d+\.\d{2})|(\$\d+)|(\d+ bucks)|(\d+ dollar)/g;
+var numRegex = /\d+(\.\d{2})?/
+
+function getBudget(id, cat){
+  
+  if(budgets[id] === undefined){
+    budgets[id] = {};
+  }
+  if(budgets[id][cat] == undefined){
+    budgets[id][cat] = 0;
+  }
+  return budgets[id][cat];
+}
+function incBudget(id, cat, amt){
+  var newAmt = getBudget(id,cat) + amt;
+  budgets[id][cat] = newAmt;
+}
+
+function processBudgetMessage(senderID, messageText){
+  var cat = classifier.categorize(messageText.toLowerCase());
+  var matches = messageText.match(dollarRegex);
+  
+  if(matches){
+    for(var i = 0; i < matches.length; i++){
+      var text = matches[i].match(numRegex)[0]; //matches[i].charAt(0)=="$"?matches[i].substr(1):matches[i];
+      var amt = Number(text);
+      incBudget(senderID, cat, amt);
+    }
+  }
+
+  sendTextMessage(senderID, "Your current budget for " + cat + " is $" + Number(getBudget(senderID,cat)).toFixed(2));
+}
+
 /*
  * Message Event
  *
@@ -308,7 +348,7 @@ function receivedMessage(event) {
         break;
 
       default:
-        sendTextMessage(senderID, messageText);
+        processBudgetMessage(senderID, messageText);
     }
   } else if (messageAttachments) {
     sendTextMessage(senderID, "Message with attachment received");
@@ -833,6 +873,9 @@ function callSendAPI(messageData) {
 app.listen(app.get('port'), function() {
   console.log('Node app is running on port', app.get('port'));
 });
+/*var privateKey = fs.readFileSync('/etc/letsencrypt/live/budgetfriend.tk/privkey.pem').toString(),
+    certificate = fs.readFileSync('/etc/letsencrypt/live/budgetfriend.tk/cert.pem').toString();
+https.createServer({key: privateKey, cert: certificate}, app).listen(443);*/
 
 module.exports = app;
 
