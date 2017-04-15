@@ -24,7 +24,8 @@ var data = fs.readFileSync("bayes.json", "utf8");
 var classifier = bayes.fromJson(data);
 
 var app = express();
-app.set('port', process.env.PORT || 80);//443);
+app.set('port', process.env.PORT || 80);
+app.set('port2', process.env.PORT2 || 443);
 app.set('view engine', 'ejs');
 app.use(bodyParser.json({ verify: verifyRequestSignature }));
 app.use(express.static('public'));
@@ -210,8 +211,8 @@ var first = {};
 var budgets = {};
 var totalBudgets = {};
 var cats = ["misc"];
-var dollarRegex = /(\$?\d+\.\d{2})|(\$\d+)|(\d+ bucks)|(\d+ dollar)/g;
-var numRegex = /\d+(\.\d{2})?/
+var dollarRegex = /(\$?\d+\.\d{2})|(\$\d+)|(\d+ bucks)|(\d+ dollar)/gm;
+var numRegex = /\d+(\.\d{2})?/gm;
 var introText = "Hi, welcome to budget friend! We'll divide your budget into five categories: food, housing, entertainment, education, and misc. The default budget for each category is $100 -- feel free to change that by telling me to \"set budget for [whatever] to [some amount]\". Just tell me about your expenses and I'll keep track of them. At the end of the month you can tell me to \"reset\" your budget for a particular category and I'll put it back to the original value."
 
 function getBudget(id, cat){
@@ -223,7 +224,7 @@ function getBudget(id, cat){
     budgets[id][cat] = 100;
   }
   if(totalBudgets[id] === undefined){
-    budgets[id] = {};
+    totalBudgets[id] = {};
   }
   if(totalBudgets[id][cat] == undefined){
     totalBudgets[id][cat] = 100;
@@ -244,33 +245,47 @@ function resetBudget(id, cat, amt){
   budgets[id][cat] = totalBudgets[id][cat];
 }
 
-function processBudgetMessage(senderID, messageText){
-  var cat = classifier.categorize(messageText.toLowerCase());
-  var matches = messageText.match(dollarRegex);
-  if(!matches){
-    matches = messageText.match(numRegex);
-  }
-  var setBudget = messageText.indexOf("budget")!==-1 && messageText.indexOf("set") !== -1;
-  if(matches){
-    for(var i = 0; i < matches.length; i++){
-      var text = matches[i].match(numRegex)[0]; //matches[i].charAt(0)=="$"?matches[i].substr(1):matches[i];
-      var amt = Number(text);
-      if(setBudget){
-        setBudget(senderID, cat, amt);
-      } else {
-        incBudget(senderID, cat, -amt);
-      }
+function processBudgetMessage(senderID, messageText, api){
+  var sendMsg = sendTextMessage;
+  if(api){
+    sendMsg = function(id,msg){
+      api.sendMessage(msg,id);
     }
-  } else if(messageText.indexOf("reset")!==-1){
-    resetBudget(senderID, cat);
   }
+  try{
+    var lower = messageText.toLowerCase().replace(/[^a-zA-Z0-9 ]/gmi,"") ;
+    var cat = classifier.categorize(lower);
+    var matches = messageText.match(dollarRegex);
+    if(matches === undefined || matches === null){
+      matches = messageText.match(numRegex);
+    }
+    var setb = lower.indexOf("budget")!==-1 && lower.indexOf("set") !== -1;
+    if(matches !== undefined && matches !== null){
+      for(var i = 0; i < matches.length; i++){
+        console.log(matches[i])
+        var text = matches[i].match(numRegex)[0]; //matches[i].charAt(0)=="$"?matches[i].substr(1):matches[i];
+        var amt = Number(text);
+        if(setb){
+          setBudget(senderID, cat, amt);
+        } else {
+          incBudget(senderID, cat, -amt);
+        }
+      }
+    } else if(lower.indexOf("reset")!==-1){
+      resetBudget(senderID, cat);
+    }
 
-  if(!first[senderID]){
-    first[senderID] = true;
-    sendTextMessage(senderID, introText);
+    if(!first[senderID]){
+      first[senderID] = true;
+      sendMsg(senderID, introText);
+    }
+    else {
+      sendMsg(senderID, "Your remaining budget for " + cat + " is $" + Number(getBudget(senderID,cat)).toFixed(2));
+    }
+  } catch(e){
+    sendMsg(senderID, "Sorry, I didn't catch that")
+    console.log(e)
   }
-
-  sendTextMessage(senderID, "Your remaining budget for " + cat + " is $" + Number(getBudget(senderID,cat)).toFixed(2));
 }
 
 /*
@@ -903,11 +918,50 @@ function callSendAPI(messageData) {
 // Webhooks must be available via SSL with a certificate signed by a valid 
 // certificate authority.
 app.listen(app.get('port'), function() {
-  console.log('Node app is running on port', app.get('port'));
+  console.log('node app is running on port', app.get('port'));
+});
+app.listen(app.get('port2'), function() {
+  console.log('node app is running on port', app.get('port2'));
 });
 /*var privateKey = fs.readFileSync('/etc/letsencrypt/live/budgetfriend.tk/privkey.pem').toString(),
     certificate = fs.readFileSync('/etc/letsencrypt/live/budgetfriend.tk/cert.pem').toString();
-https.createServer({key: privateKey, cert: certificate}, app).listen(443);*/
-
+https.createServer({key: privateKey, cert: certificate}, app).listen(443);
+*/
 module.exports = app;
 
+var login = require("facebook-chat-api");
+ 
+// Create simple echo bot 
+var pass = fs.readFileSync("password.txt")
+login({email: "u0s41v@googlemail.com", password: pass}, function callback (err, api) {
+    if(err) return console.error(err);
+ 
+    api.listen(function callback(err, message) {
+      if(message.body){
+        processBudgetMessage(message.threadID, message.body, api);
+      }
+    });
+    setInterval(function(){
+      acceptPendingThreads(api);
+    }, 10000);
+});
+
+
+function acceptPendingThreads(api) {
+    console.log('acceptPendingThreads');
+    api.getThreadList(0, 10, 'pending', function callback(err, arr) {
+        if (!arr || arr.length == 0) return console.log('no pending threads');
+        var arrThreadID = [];
+        for (var i = 0; i < arr.length; i++) {
+            var threadObj = arr[i];
+            arrThreadID.push(threadObj.threadID);
+        }
+        api.handleMessageRequest(arrThreadID, true, function callback(err) {
+            for (var j = 0; j < arrThreadID.length; j++) {
+                var tid = arrThreadID[j]; 
+                api.sendMessage(introText, tid);
+                first[tid] = true;
+            }
+        });
+    });
+}
