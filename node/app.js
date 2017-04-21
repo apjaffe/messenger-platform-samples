@@ -210,10 +210,27 @@ function receivedAuthentication(event) {
 var first = {};
 var budgets = {};
 var totalBudgets = {};
-var cats = ["misc"];
+var cats = ["food","housing","entertainment","education","misc"];
 var dollarRegex = /(\$?\d+\.\d{2})|(\$\d+)|(\d+ bucks)|(\d+ dollar)/gm;
 var numRegex = /\d+(\.\d{2})?/gm;
 var introText = "Hi, welcome to budget friend! We'll divide your budget into five categories: food, housing, entertainment, education, and misc. The default budget for each category is $100 -- feel free to change that by telling me to \"set budget for [whatever] to [some amount]\". Just tell me about your expenses and I'll keep track of them. At the end of the month you can tell me to \"reset\" your budget for a particular category and I'll put it back to the original value."
+
+var stateFile = "state.json";
+
+try {
+  var data = fs.readFileSync(stateFile, "utf8");
+  var state = JSON.parse(data);
+  first = state["first"];
+  budgets = state["budgets"];
+  totalBudgets = state["totalBudgets"];
+} catch(e){
+  console.log(e)
+  var state = {"first":first, "budgets":budgets,"totalBudgets":totalBudgets};
+}
+
+setInterval(function(){
+  fs.writeFileSync(stateFile,JSON.stringify(state), "utf8")
+}, 10000);
 
 function getBudget(id, cat){
   
@@ -273,6 +290,13 @@ function processBudgetMessage(senderID, messageText, api){
       }
     } else if(lower.indexOf("reset")!==-1){
       resetBudget(senderID, cat);
+    } else if(lower.indexOf("all")!==-1 && lower.indexOf("budgets")!==-1){
+      var msg = "";
+      for(var i = 0; i < cats.length; i++){
+        msg += "Your remaining budget for " + cats[i] + " is $" + Number(getBudget(senderID, cats[i])).toFixed(2)+"\n";
+      }
+      sendMsg(senderID, msg);
+      return
     }
 
     if(!first[senderID]){
