@@ -216,7 +216,7 @@ var budgets = {};
 var totalBudgets = {};
 var userids = {};
 var cats = ["food","housing","entertainment","education","misc"];
-var cats2 = ["Eating Out","Housing","Entertainment","Education","Miscellaneous"];
+var cats2 = ["Eating out","Housing","Entertainment","Education","Miscellaneous"];
 var dollarRegex = /(\$?\d+\.\d{2})|(\$\d+)|(\d+ bucks)|(\d+ dollar)/gm;
 var numRegex = /\d+(\.\d{2})?/gm;
 var userIdRegex = /\d{16,20}/gm;
@@ -224,6 +224,8 @@ var userIdRegex = /\d{16,20}/gm;
 var introText = "Hi, welcome to budget bot! To get started, please send me your security code. Then you can just tell me about your expenses and I'll help you keep track of them! If you don't have an account, you can make one at https://budgetfriend.tk/web";
 var host = "http://35.229.19.246:8080"
 
+//https://www.supermoney.com/2014/08/20-absurd-facts-about-money/
+var facts = ["A penny costs 2.4 cents to manufacture.","Only 8% of the world's currency is actual physical money.","Approximately 96% of people who are currently employed, will not be able to collect their full Social Security retirement benefits when they reach the age of 65."];
 
 var stateFile = "state.json";
 
@@ -322,15 +324,17 @@ function processBudgetMessage(senderID, messageText, api){
       return;
     }
 
+    var randFact = "Fun fact: " + facts[Math.floor(Math.random()*facts.length)];
+
     request(host+"/get_category?userid="+userids[senderID]+"&category="+cat2, function (error, response, body) {
       try {
         var jsn = JSON.parse(body);
         if(jsn === false) {
           sendMsg(senderID, "Sorry, that didn't work. Check that your security code is correct.")
         } else if (jsn[1] > 0) {
-          sendMsg(senderID, "In the past 30 days, you've spent at least $" + jsn[0] + " on " + cat2.toLowerCase() + ", not counting " + jsn[1] + " transactions with unknown cost.");
+          sendMsg(senderID, "In the past 30 days, you've spent at least $" + jsn[0] + " on " + cat2.toLowerCase() + ", not counting " + jsn[1] + " transactions with unknown cost. " + randFact);
         } else {
-          sendMsg(senderID, "In the past 30 days, you've spent $" + jsn[0] + " on " + cat2.toLowerCase() + ".");
+          sendMsg(senderID, "In the past 30 days, you've spent $" + jsn[0] + " on " + cat2.toLowerCase() + ". " + randFact);
         }
       } catch(e) {
         console.log(e);
